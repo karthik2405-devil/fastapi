@@ -1,6 +1,7 @@
 from fastapi import FastAPI,Response, status,HTTPException,Depends,APIRouter
 import models,schemas,utils,oauth2
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 from typing import List,Optional
 from database import get_db
 router=APIRouter()
@@ -8,20 +9,29 @@ router=APIRouter()
 async def get_user():
     return {"message":"welcome!!!"}
 
-@router.get("/posts/",response_model=List[schemas.Post])
-async def get_posts(db:Session=Depends(get_db),current_user:int=Depends(oauth2.get_current_user)):
-                    
 
-    posts=db.query(models.Post).all()
-    # if posts.owner_id!= current_user.id:
-    #     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,detail=f'not authorised to perform the action ')
+@router.get("/posts", response_model=List[schemas.PostOut])
+async def get_posts(
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+    limit: int = 10,
+    skip: int = 0,
+    search: Optional[str] = ''
+):
+    posts_query = db.query(
+        models.Post,
+        func.count(models.Vote.post_id).label("votes")
+    ).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True
+    ).group_by(
+        models.Post.id
+    ).filter(
+        models.Post.title.contains(search)
+    ).limit(limit).offset(skip)
 
-    # cursor.execute(""" SELECT * FROM public.products """)
-    # posts=cursor.fetchall()
+    posts = posts_query.all()
     
     return posts
-
-
 @router.post("/posts/",status_code=status.HTTP_201_CREATED,response_model=schemas.Post)
 
 async def create_posts(post :schemas.PostCreate,db:Session=Depends(get_db),current_user:int=Depends(oauth2.get_current_user)):
@@ -52,10 +62,31 @@ async def create_posts(post :schemas.PostCreate,db:Session=Depends(get_db),curre
 
 
 
-@router.get("/posts/{id}",response_model=schemas.Post)
+@router.get("/posts/{id}",response_model=schemas.PostOut)
 
-async def get_posts(id:int,db:Session = Depends(get_db),current_user:int=Depends(oauth2.get_current_user)):
-    post=db.query(models.Post).filter(models.Post.id==id).first()
+async def get_posts(
+    db: Session = Depends(get_db),
+    current_user: int = Depends(oauth2.get_current_user),
+    limit: int = 10,
+    skip: int = 0,
+    search: Optional[str] = ''
+):
+    # post=db.query(models.Post).filter(models.Post.id==id).first()
+    # posts_query=db.query(models.Post,func.count(models.Vote.post_id).label("votes")).join(models.Vote,models.Vote.post_id==models.Post.id,isouter=True).group_by(models.Post.id).filter(models.Post.title.contains(search)).limit(limit).offset(skip)
+    
+    posts_query = db.query(
+        models.Post,
+        func.count(models.Vote.post_id).label("votes")
+    ).join(
+        models.Vote, models.Vote.post_id == models.Post.id, isouter=True
+    ).group_by(
+        models.Post.id
+    ).filter(
+        models.Post.title.contains(search)
+    ).limit(limit).offset(skip).first()
+
+    posts = posts_query
+    
 
     # cursor.execute(f"""Select * from public.products where id={id} """,id)
     # post_with_id=cursor.fetchone()
@@ -63,12 +94,12 @@ async def get_posts(id:int,db:Session = Depends(get_db),current_user:int=Depends
     
     
     # post=find_post(id)
-    if not post:
+    if not posts_query:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,detail=f'post with id :{id} was not found')
         # response.status_code=status.HTTP_404_NOT_FOUND
         # return {"message":f'post with id :{id} was not found'}
     
-    return post
+    return posts
 
 @router.delete("/posts/{id}",status_code=status.HTTP_204_NO_CONTENT)
 def post_delete(id:int,db:Session = Depends(get_db),current_user:int=Depends(oauth2.get_current_user)):

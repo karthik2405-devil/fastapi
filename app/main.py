@@ -9,7 +9,7 @@ from psycopg2.extras import RealDictCursor
 import time
 import models,schemas,utils
 from config import settings
-from routers import post,user,auth
+from routers import post,user,auth,vote
 from database import engine,SessionLocal,get_db
 from sqlalchemy.orm import Session
 
@@ -20,7 +20,7 @@ app=FastAPI()
 app.include_router(post.router)
 app.include_router(user.router)
 app.include_router(auth.router)
-
+app.include_router(vote.router)
 
     # review:str
 while True:
